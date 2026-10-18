@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: cloudops
+      POSTGRES_PASSWORD: cloudops
+      POSTGRES_DB: cloudops
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloudops"]
+      interval: 5s
+      retries: 10
+
+  migrate:
+    build: .
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      APP_DATABASE_URL: postgresql+psycopg://cloudops:cloudops@db:5432/cloudops
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    build: .
+    image: cloudops-api:dev
+    environment:
+      APP_DATABASE_URL: postgresql+psycopg://cloudops:cloudops@db:5432/cloudops
+    ports: ["8000:8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+volumes:
+  pgdata:
