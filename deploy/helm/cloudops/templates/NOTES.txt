@@ -1,0 +1,6 @@
+CloudOps Launchpad {{ .Values.image.tag }} deployed as release "{{ .Release.Name }}" (revision {{ .Release.Revision }}).
+
+  API:      http://localhost:8080/docs     (kind maps NodePort {{ .Values.api.nodePort }} -> host 8080)
+  Health:   curl http://localhost:8080/readyz
+  Pods:     kubectl get pods -n {{ .Release.Namespace }}
+  Backup:   kubectl create job -n {{ .Release.Namespace }} --from=cronjob/{{ include "cloudops.name" . }}-backup manual-backup

@@ -1,0 +1,33 @@
+image:
+  repository: cloudops-api
+  tag: dev
+  pullPolicy: IfNotPresent
+
+api:
+  replicas: 2
+  nodePort: 30080
+  resources:
+    requests: { cpu: 50m, memory: 96Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+
+postgres:
+  image: postgres:17-alpine
+  database: cloudops
+  user: cloudops
+  # Leave empty to generate a random password on first install (kept across upgrades).
+  password: ""
+  storage: 1Gi
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: "1", memory: 512Mi }
+
+backup:
+  enabled: true
+  schedule: "0 2 * * *"
+  storage: 1Gi
+  keep: 7
+
+monitoring:
+  # Creates ServiceMonitor + PrometheusRule when the Prometheus Operator CRDs exist.
+  enabled: true
+  releaseLabel: monitoring
