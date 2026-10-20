@@ -1,0 +1,69 @@
+{{- if .Values.backup.enabled }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "cloudops.name" . }}-backup
+  labels: {{- include "cloudops.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          # The backups volume is ReadWriteOnce and owned by the Postgres pod: run on its node.
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - topologyKey: kubernetes.io/hostname
+                  labelSelector:
+                    matchLabels: {{- include "cloudops.dbSelector" . | nindent 22 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+            seccompProfile: { type: RuntimeDefault }
+          containers:
+            - name: pg-dump
+              image: {{ .Values.postgres.image }}
+              env:
+                - name: PGHOST
+                  value: {{ include "cloudops.dbHost" . }}
+                - name: PGUSER
+                  value: {{ .Values.postgres.user }}
+                - name: PGDATABASE
+                  value: {{ .Values.postgres.database }}
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef: { name: {{ include "cloudops.secret" . }}, key: password }
+              command:
+                - sh
+                - -ec
+                - |
+                  file=/backups/cloudops-$(date -u +%Y%m%dT%H%M%SZ).dump
+                  pg_dump -Fc -f "$file.partial"
+                  mv "$file.partial" "$file"
+                  echo "wrote $file ($(du -h "$file" | cut -f1))"
+                  # keep only the newest N dumps
+                  ls -1t /backups/*.dump | tail -n +{{ add .Values.backup.keep 1 }} | xargs -r rm -v
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: backups-{{ include "cloudops.dbHost" . }}-0
+            - name: tmp
+              emptyDir: {}
+{{- end }}
