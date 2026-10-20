@@ -1,0 +1,60 @@
+{{- if and .Values.monitoring.enabled (.Capabilities.APIVersions.Has "monitoring.coreos.com/v1/ServiceMonitor") }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "cloudops.name" . }}-api
+  labels:
+    {{- include "cloudops.labels" . | nindent 4 }}
+    release: {{ .Values.monitoring.releaseLabel }}
+spec:
+  selector:
+    matchLabels: {{- include "cloudops.apiSelector" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "cloudops.name" . }}-alerts
+  labels:
+    {{- include "cloudops.labels" . | nindent 4 }}
+    release: {{ .Values.monitoring.releaseLabel }}
+spec:
+  groups:
+    - name: cloudops-api
+      rules:
+        - alert: CloudOpsApiDown
+          expr: sum(up{service="{{ include "cloudops.name" . }}-api"}) == 0 or absent(up{service="{{ include "cloudops.name" . }}-api"})
+          for: 1m
+          labels: { severity: critical }
+          annotations:
+            summary: No CloudOps API pod is being scraped successfully.
+        - alert: CloudOpsHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{service="{{ include "cloudops.name" . }}-api", status="5xx"}[5m]))
+              / clamp_min(sum(rate(http_requests_total{service="{{ include "cloudops.name" . }}-api"}[5m])), 1e-9) > 0.05
+          for: 5m
+          labels: { severity: warning }
+          annotations:
+            summary: More than 5% of CloudOps API requests are failing with 5xx.
+        - alert: CloudOpsPodRestarting
+          expr: increase(kube_pod_container_status_restarts_total{namespace="{{ .Release.Namespace }}", container="api"}[15m]) > 2
+          labels: { severity: warning }
+          annotations:
+            summary: "CloudOps API pod {{ "{{" }} $labels.pod {{ "}}" }} restarted more than twice in 15 minutes."
+{{- end }}
+{{- if .Values.monitoring.enabled }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cloudops.name" . }}-dashboard
+  labels:
+    {{- include "cloudops.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  cloudops.json: |-
+{{ .Files.Get "dashboards/cloudops.json" | indent 4 }}
+{{- end }}
