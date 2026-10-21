@@ -7,6 +7,10 @@ in **GitHub Actions**, and observed with **Prometheus + Grafana** — plus scrip
 
 ![CI](https://github.com/frayedzip/cloudops-launchpad/actions/workflows/ci.yml/badge.svg)
 
+**📸 [Screenshots: Grafana, CI pipeline, security scans, recovery and backup drills →](portfolio/README.md)**
+
+![Grafana dashboard](portfolio/01-grafana-dashboard.png)
+
 ## Architecture
 
 ```mermaid
